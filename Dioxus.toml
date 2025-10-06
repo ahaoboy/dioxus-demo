@@ -1,3 +1,7 @@
+[bundle]
+publisher = "MyCompany"
+identifier = "com.mycompany"
+
 [application]
 
 [web.app]
