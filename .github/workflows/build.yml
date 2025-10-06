@@ -8,6 +8,7 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
@@ -51,7 +52,7 @@ jobs:
 
       - name: Build and bundle
         run: |
-          dx bundle --platform ${{ matrix.platform }} --package-types "${{ matrix.package_types }}" --release
+          dx bundle --platform=${{ matrix.platform }} --package-types "${{ matrix.package_types }}" --release
         env:
           # Android 特定环境变量，如果需要
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
