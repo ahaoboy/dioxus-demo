@@ -1,0 +1,82 @@
+name: Build Dioxus Packages
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: desktop
+            package_types: "app,dmg"
+          - os: windows-latest
+            platform: desktop
+            package_types: "exe,msi"
+          - os: ubuntu-latest
+            platform: desktop
+            package_types: "appimage"
+          - os: ubuntu-latest
+            platform: android
+            package_types: "apk"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'android' && 'aarch64-linux-android' || '' }}
+
+      - uses: cargo-bins/cargo-binstall@main
+
+      - name: Install Dioxus CLI
+        run: cargo binstall dioxus-cli -y
+
+      - name: Setup Android (for Android only)
+        if: matrix.platform == 'android'
+        uses: android-actions/setup-android@v3
+        with:
+          sdk-version: "34"
+          ndk-version: "25.2.9519653"
+
+      - name: Install Android targets (for Android only)
+        if: matrix.platform == 'android'
+        run: |
+          rustup target add aarch64-linux-android
+          # 添加其他 Android 目标如 armv7-linux-androideabi 等，根据需要
+
+      - name: Build and bundle
+        run: |
+          dx bundle --platform ${{ matrix.platform }} --package-types "${{ matrix.package_types }}" --release
+        env:
+          # Android 特定环境变量，如果需要
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+
+      - name: Upload artifacts to Releases (on release)
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./target/dx/${{ github.event.repository.name }}/bundle/* # 调整路径到实际 bundle 输出
+          asset_name: ${{ matrix.platform }}-${{ matrix.package_types }}.zip # 打包成 zip 上传
+          asset_content_type: application/zip
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.package_types }}
+          path: ./target/dx/${{ github.event.repository.name }}/bundle/*
+  # 可选：合并 job，发布 release
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - name: Notify success
+        run: echo "All platforms built successfully!"
